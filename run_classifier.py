@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""BERT finetuning runner."""
+"""BERT fine tuning runner. 微调部分代码"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -125,13 +125,11 @@ flags.DEFINE_integer(
     "num_tpu_cores", 8,
     "Only used if `use_tpu` is True. Total number of TPU cores to use.")
 
-
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
     def __init__(self, guid, text_a, text_b=None, label=None):
         """Constructs a InputExample.
-
         Args:
           guid: Unique id for the example.
           text_a: string. The untokenized text of the first sequence. For single
@@ -254,8 +252,8 @@ class XnliProcessor(DataProcessor):
         return ["contradiction", "entailment", "neutral"]
 
 
-class SimProcessor(DataProcessor):
-    """Processor for the Sim task"""
+class MyProcessor(DataProcessor):
+    """Processor for the my task"""
 
     # read csv
     # def get_train_examples(self, data_dir):
@@ -271,8 +269,8 @@ class SimProcessor(DataProcessor):
     #   return train_data
 
     # read txt
-    #返回InputExample类组成的list
-    #text_a是一串字符串，text_b则是另一串字符串。在进行后续输入处理后(BERT代码中已包含，不需要自己完成)
+    # 返回InputExample类组成的list
+    # text_a是一串字符串，text_b则是另一串字符串。在进行后续输入处理后(BERT代码中已包含，不需要自己完成)
     # text_a和text_b将组合成[CLS] text_a [SEP] text_b [SEP]的形式传入模型
     def get_train_examples(self, data_dir):
         file_path = os.path.join(data_dir, 'train_sentiment.txt')
@@ -280,11 +278,11 @@ class SimProcessor(DataProcessor):
         train_data = []
         index = 0
         for line in f.readlines():
-            guid = 'train-%d' % index#参数guid是用来区分每个example的
+            guid = 'train-%d' % index  # 参数guid是用来区分每个example的
             line = line.replace("\n", "").split("\t")
-            text_a = tokenization.convert_to_unicode(str(line[1]))#要分类的文本
-            label = str(line[2])#文本对应的情感类别
-            train_data.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=label))#加入到InputExample列表中
+            text_a = tokenization.convert_to_unicode(str(line[1]))  # 要分类的文本
+            label = str(line[2])  # 文本对应的情感类别
+            train_data.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=label))  # 加入到InputExample列表中
             index += 1
         return train_data
 
@@ -315,19 +313,34 @@ class SimProcessor(DataProcessor):
             index += 1
         return dev_data
 
+    # csv
     def get_test_examples(self, data_dir):
-        file_path = os.path.join(data_dir, 'test.csv')
-        test_df = pd.read_csv(file_path, encoding='utf-8')
+        file_path = os.path.join(data_dir, 'answer.csv')
+        test_df = pd.read_csv(file_path, encoding='utf-8', header=None, sep='\n')
         test_data = []
         for index, test in enumerate(test_df.values):
             guid = 'test-%d' % index
-            text_a = tokenization.convert_to_unicode(str(test[0]))
-            # text_b = tokenization.convert_to_unicode(str(test[1]))
-            label = str(test[1])
-            test_data.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+            text_a = tokenization.convert_to_unicode(str(test[0]).split("\t")[1])
+            test_data.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=str(0)))
         return test_data
 
+    # # txt
+    # def get_test_examples(self, data_dir):
+    #     file_path = os.path.join(data_dir, 'test_sentiment.txt')
+    #     f = open(file_path, 'r', encoding='utf-8')
+    #     test_data = []
+    #     index = 0
+    #     for line in f.readlines():
+    #         guid = 'dev-%d' % index
+    #         line = line.replace("\n", "").split("\t")
+    #         text_a = tokenization.convert_to_unicode(str(line[1]))
+    #         label = str(line[2])
+    #         test_data.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+    #         index += 1
+    #     return test_data
+
     def get_labels(self):
+        # 分别对应三类情感标签
         return ['0', '1', '2']
 
 
@@ -867,7 +880,7 @@ def main(_):
         "mnli": MnliProcessor,
         "mrpc": MrpcProcessor,
         "xnli": XnliProcessor,
-        "sim": SimProcessor,
+        "my": MyProcessor,
     }
 
     tokenization.validate_case_matches_checkpoint(FLAGS.do_lower_case,
@@ -1035,8 +1048,12 @@ def main(_):
             drop_remainder=predict_drop_remainder)
 
         result = estimator.predict(input_fn=predict_input_fn)
+        df = pd.read_csv('data/answer.csv', encoding='utf-8', header=None, sep='\n')
+        data = []
+        for index, text in enumerate(df.values):
+            data.append(str(text[0]).split("\t"))
 
-        output_predict_file = os.path.join(FLAGS.output_dir, "test_results.tsv")
+        output_predict_file = os.path.join(FLAGS.output_dir, "answer_result.tsv")
         with tf.gfile.GFile(output_predict_file, "w") as writer:
             num_written_lines = 0
             tf.logging.info("***** Predict results *****")
@@ -1044,9 +1061,10 @@ def main(_):
                 probabilities = prediction["probabilities"]
                 if i >= num_actual_predict_examples:
                     break
-                output_line = "\t".join(
-                    str(class_probability)
-                    for class_probability in probabilities) + "\n"
+                for j in range(len(probabilities)):
+                    if probabilities[j] == max(probabilities):
+                        prelabel = str(j)
+                output_line = "\t".join(data[i]) + "\t" + prelabel + "\t" + str(max(probabilities)) + "\n"
                 writer.write(output_line)
                 num_written_lines += 1
         assert num_written_lines == num_actual_predict_examples
