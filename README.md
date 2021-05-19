@@ -65,7 +65,7 @@ BERT的代码同论文里描述的一致，主要分为两个部分。一个是*
   - 类似于run_classifier.py的main方法，实现了predicts方法以实现语句级别的预测
   - intent.py为一个执行demo
 
-###MyProcessor
+### MyProcessor
 
 ```python
 class MyProcessor(DataProcessor):
@@ -138,7 +138,7 @@ class MyProcessor(DataProcessor):
     }
 ```
 
-###single_predict.py
+### single_predict.py
 
 ```python
 def predicts(text_data):
